@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">VBsal</string>
+    <string name="title_activity_main">VBsal</string>
+    <string name="package_name">ru.vbsal.app</string>
+    <string name="custom_url_scheme">ru.vbsal.app</string>
+</resources>

@@ -1,0 +1,16 @@
+{
+  "appId": "ru.vbsal.app",
+  "appName": "VBsal",
+  "webDir": "www",
+  "backgroundColor": "#111214",
+  "android": {
+    "backgroundColor": "#111214"
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "css",
+      "initialViewportFitValueHint": "cover",
+      "style": "DARK"
+    }
+  }
+}

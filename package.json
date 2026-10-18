@@ -1,0 +1,16 @@
+{
+  "name": "vbsal",
+  "version": "1.0.0",
+  "private": true,
+  "description": "VBsal — календарь смен и заработка банщика",
+  "scripts": {
+    "sync": "cap sync android",
+    "apk": "cap sync android && cd android && gradlew.bat assembleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/cli": "^8.5.3",
+    "@capacitor/core": "^8.5.3"
+  }
+}
