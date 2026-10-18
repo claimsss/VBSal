@@ -223,6 +223,7 @@ svg { display: block; }
 .tile.orange { background: #3a2a22; color: var(--orange); }
 .tile.green { background: #1a322c; color: var(--green); }
 .tile.blue { background: #1d2a40; color: var(--blue); }
+.tile.yellow { background: #3a3320; color: #ffd166; }
 .tile.purple { background: var(--accent-soft); color: var(--accent-2); }
 
 .grow { flex: 1; min-width: 0; }
@@ -459,6 +460,8 @@ svg { display: block; }
 .field .suffix { color: var(--muted); flex: none; }
 
 .rate-field { margin-top: 14px; }
+.tips-field { flex: none; width: 130px; }
+.tips-field input { text-align: right; }
 
 .svc-edit {
   display: grid;
@@ -583,6 +586,10 @@ body[data-screen="stats"]::before {
   border-radius: 3px;
   background: linear-gradient(90deg, #2f6bff, #5fb4ff);
   box-shadow: 0 0 10px rgba(80, 150, 255, 0.6);
+}
+.meter-fill.tips {
+  background: linear-gradient(90deg, #e0a91f, #ffd166);
+  box-shadow: 0 0 10px rgba(255, 200, 80, 0.45);
 }
 .meter-fill.warm {
   background: linear-gradient(90deg, #ff7a3d, #ffb36b);

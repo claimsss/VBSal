@@ -3,7 +3,7 @@
 // ---------- Константы ----------
 
 const STORE_KEY = 'vbsal.v1';
-const APP_VERSION = '1.0';
+const APP_VERSION = '1.1';
 const BREATH_PRICE = 500;   // «второе дыхание» прибавляется к цене процедуры
 const WORKER_SHARE = 0.4;   // банщикам остаётся 40% (минус 60%)
 const DEFAULT_RATE = 4500;
@@ -46,6 +46,7 @@ const ICON = {
   flame: svg('<path d="M12 22c4 0 7-2.8 7-6.9 0-3.4-2.4-5.8-3.9-8.4-.5 1.9-1.6 3.1-3 3.6.3-3-1.2-5.8-3.6-8.3C8.4 5.6 5 8.7 5 15.1 5 19.2 8 22 12 22z"/>'),
   users: svg('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>'),
   leaf: svg('<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>'),
+  coins: svg('<circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="M16.71 13.88l.7.71-2.82 2.82"/>'),
   wallet: svg('<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>'),
   refresh: svg('<path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/>'),
   tag: svg('<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1.5"/>'),
@@ -117,24 +118,25 @@ function ensureDay(key) {
 const procPrice = (p) => p.price + (p.breath ? BREATH_PRICE : 0);
 const procSum = (d) => d.procs.reduce((s, p) => s + procPrice(p), 0);
 const dayRate = (d) => (d.shift ? (d.rate ?? state.settings.rate) : 0);
-const hasData = (d) => !!d && (d.shift || d.procs.length > 0);
+const dayTips = (d) => d.tips || 0;   // в днях до версии 1.1 поля нет
+const hasData = (d) => !!d && (d.shift || d.procs.length > 0 || dayTips(d) > 0);
 
-// (ставка за смену, если отмечена) + (процедуры − 60%) / банщиков
+// (ставка за смену, если отмечена) + (процедуры − 60%) / банщиков + личные чаевые
 function dayEarn(d) {
   if (!d) return 0;
-  return Math.round(dayRate(d) + (procSum(d) * WORKER_SHARE) / (d.bathers || DEFAULT_BATHERS));
+  return Math.round(dayRate(d) + (procSum(d) * WORKER_SHARE) / (d.bathers || DEFAULT_BATHERS) + dayTips(d));
 }
 
 function cleanupDay(key) {
   const d = state.days[key];
-  if (d && !d.shift && d.procs.length === 0 && d.bathers === DEFAULT_BATHERS) delete state.days[key];
+  if (d && !d.shift && d.procs.length === 0 && !dayTips(d) && d.bathers === DEFAULT_BATHERS) delete state.days[key];
 }
 
 function monthStats(y, m) {
   const dim = daysIn(y, m);
   const perDay = [];
   const top = new Map();
-  let shifts = 0, procs = 0, rateSum = 0, total = 0, active = 0;
+  let shifts = 0, procs = 0, rateSum = 0, tipsSum = 0, total = 0, active = 0;
   for (let i = 1; i <= dim; i++) {
     const d = state.days[keyOf(y, m, i)];
     const earn = hasData(d) ? dayEarn(d) : 0;
@@ -143,11 +145,12 @@ function monthStats(y, m) {
     active++;
     total += earn;
     if (d.shift) { shifts++; rateSum += dayRate(d); }
+    tipsSum += dayTips(d);
     procs += d.procs.length;
     for (const p of d.procs) top.set(p.name, (top.get(p.name) || 0) + 1);
   }
   const topList = [...top.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
-  return { dim, perDay, shifts, procs, rateSum, percentSum: total - rateSum, total, active, topList };
+  return { dim, perDay, shifts, procs, rateSum, tipsSum, percentSum: total - rateSum - tipsSum, total, active, topList };
 }
 
 // ---------- Навигация ----------
@@ -289,10 +292,21 @@ function renderDay(key) {
       <div class="proc-list">${list}</div>
     </div>
 
+    <div class="card">
+      <div class="card-head">
+        <span class="tile yellow">${ICON.coins}</span>
+        <div class="grow"><div class="card-title">Чаевые</div></div>
+        <label class="field tips-field">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" placeholder="0" data-field="tips" value="${dayTips(d) || ''}">
+          <span class="suffix">₽</span>
+        </label>
+      </div>
+    </div>
+
     <div class="result">
       <div><div class="lbl">ПРОЦЕДУР</div><div class="val">${d.procs.length}</div></div>
       <div class="sep"></div>
-      <div><div class="lbl">ЗАРАБОТАНО</div><div class="val">${fmt(dayEarn(d))}</div></div>
+      <div><div class="lbl">ЗАРАБОТАНО</div><div class="val" id="day-earn">${fmt(dayEarn(d))}</div></div>
     </div>
   </div>`;
 }
@@ -444,6 +458,11 @@ function renderStats() {
         <div class="meter-track"><div class="meter-fill" style="width:${share(st.percentSum)}%"></div></div>
         <span class="num">${fmt(st.percentSum)} ₽</span>
       </div>
+      ${st.tipsSum ? `<div class="meter">
+        <span>Чаевые</span>
+        <div class="meter-track"><div class="meter-fill tips" style="width:${share(st.tipsSum)}%"></div></div>
+        <span class="num">${fmt(st.tipsSum)} ₽</span>
+      </div>` : ''}
       <div class="meter">
         <span>В среднем</span>
         <span></span>
@@ -670,7 +689,9 @@ document.addEventListener('change', (e) => {
   const el = e.target;
   const f = el.dataset && el.dataset.field;
   if (!f) return;
-  if (f === 'rate') {
+  if (f === 'tips') {
+    commitDay(currentRoute().arg);
+  } else if (f === 'rate') {
     const v = toInt(el.value);
     el.value = v;
     setRate(v);
@@ -681,6 +702,17 @@ document.addEventListener('change', (e) => {
     if (f === 'svc-price') { svc.price = toInt(el.value); el.value = svc.price; }
     save();
   }
+});
+
+// Чаевые: итог дня обновляется прямо во время ввода
+document.addEventListener('input', (e) => {
+  const el = e.target;
+  if (!el.dataset || el.dataset.field !== 'tips') return;
+  const d = ensureDay(currentRoute().arg);
+  d.tips = toInt(el.value);
+  save();
+  const out = document.getElementById('day-earn');
+  if (out) out.textContent = fmt(dayEarn(d));
 });
 
 // Enter на клавиатуре телефона — просто убрать фокус
