@@ -3,7 +3,7 @@
 // ---------- Константы ----------
 
 const STORE_KEY = 'vbsal.v1';
-const APP_VERSION = '1.6';
+const APP_VERSION = '1.7';
 const BREATH_PRICE = 500;   // «второе дыхание» прибавляется к цене процедуры
 const WORKER_SHARE = 0.4;   // банщикам остаётся 40% (минус 60%)
 const DEFAULT_RATE = 4500;
@@ -65,7 +65,7 @@ function defaultServices() {
 
 function defaultState() {
   return {
-    settings: { rate: DEFAULT_RATE, recalc: false, theme: 'dark' },
+    settings: { rate: DEFAULT_RATE, recalc: false, theme: 'dark', halfShift: false },
     services: defaultServices(),
     days: {},
   };
@@ -122,9 +122,12 @@ function ensureDay(key) {
 
 const procPrice = (p) => p.price + (p.breath ? BREATH_PRICE : 0);
 const procSum = (d) => d.procs.reduce((s, p) => s + procPrice(p), 0);
-const dayRate = (d) => (d.shift ? (d.rate ?? state.settings.rate) : 0);
+// Полсмены (d.half) — половина ставки; с полной сменой не совмещается
+const fullRate = (d) => d.rate ?? state.settings.rate;
+const dayRate = (d) => (d.shift ? fullRate(d) : d.half ? fullRate(d) / 2 : 0);
+const shiftUnits = (d) => (d.shift ? 1 : d.half ? 0.5 : 0);
 const dayTips = (d) => d.tips || 0;   // в днях до версии 1.1 поля нет
-const hasData = (d) => !!d && (d.shift || d.procs.length > 0 || dayTips(d) > 0);
+const hasData = (d) => !!d && (d.shift || d.half || d.procs.length > 0 || dayTips(d) > 0);
 
 // (ставка за смену, если отмечена) + (процедуры − 60%) / банщиков + личные чаевые
 function dayEarn(d) {
@@ -134,7 +137,7 @@ function dayEarn(d) {
 
 function cleanupDay(key) {
   const d = state.days[key];
-  if (d && !d.shift && d.procs.length === 0 && !dayTips(d) && d.bathers === DEFAULT_BATHERS) delete state.days[key];
+  if (d && !d.shift && !d.half && d.procs.length === 0 && !dayTips(d) && d.bathers === DEFAULT_BATHERS) delete state.days[key];
 }
 
 function monthStats(y, m) {
@@ -149,7 +152,8 @@ function monthStats(y, m) {
     if (!hasData(d)) continue;
     active++;
     total += earn;
-    if (d.shift) { shifts++; rateSum += dayRate(d); }
+    shifts += shiftUnits(d);
+    rateSum += dayRate(d);
     tipsSum += dayTips(d);
     procs += d.procs.length;
     for (const p of d.procs) top.set(p.name, (top.get(p.name) || 0) + 1);
@@ -208,9 +212,10 @@ function renderCalendar() {
     if (date.getMonth() !== m) cls.push('other');
     if (key === today) cls.push('today');
     if (d && d.shift) cls.push('shift');
+    else if (d && d.half) cls.push('half');
     const amt = hasData(d) ? dayEarn(d) : 0;
     cells += `<button class="${cls.join(' ')}" data-action="open-day" data-key="${key}">
-      ${d && !d.shift && d.procs.length ? '<span class="dot"></span>' : ''}
+      ${d && !d.shift && !d.half && d.procs.length ? '<span class="dot"></span>' : ''}
       <span>${date.getDate()}</span>
       ${amt ? `<span class="amt">${fmt(amt)}</span>` : ''}
     </button>`;
@@ -229,7 +234,7 @@ function renderCalendar() {
     <div class="weekdays">${WEEKDAYS.map((w) => `<span>${w}</span>`).join('')}</div>
     <div class="cal-grid" id="cal-grid">${cells}</div>
     <button class="month-sum" data-action="stats">
-      <div><div class="lbl">Смен</div><div class="val">${st.shifts}</div></div>
+      <div><div class="lbl">Смен</div><div class="val">${st.shifts.toLocaleString('ru-RU')}</div></div>
       <div class="right"><div class="lbl">Заработано в ${MONTHS_PREP[m]}</div><div class="val accent">${fmt(st.total)} ₽</div></div>
     </button>
   </div>`;
@@ -240,7 +245,8 @@ function renderCalendar() {
 function renderDay(key) {
   const d = state.days[key] || newDay();
   const date = parseKey(key);
-  const rate = d.shift ? dayRate(d) : state.settings.rate;
+  const rate = d.shift || d.half ? fullRate(d) : state.settings.rate;
+  const showHalf = state.settings.halfShift || d.half;
 
   const list = d.procs.length
     ? d.procs.map((p, i) => `<div class="proc">
@@ -272,6 +278,15 @@ function renderDay(key) {
         </span>
         <span class="switch ${d.shift ? 'on' : ''}"></span>
       </button>
+      ${showHalf ? `<div class="card-divider"></div>
+      <button class="card-head tap" data-action="toggle-half">
+        <span class="tile orange half-tile">${ICON.flame}</span>
+        <span class="grow">
+          <div class="card-title">Полсмены</div>
+          <div class="card-sub">Ставка ${fmt(rate / 2)} ₽</div>
+        </span>
+        <span class="switch ${d.half ? 'on' : ''}"></span>
+      </button>` : ''}
     </div>
 
     <div class="card">
@@ -447,7 +462,7 @@ function renderStats() {
     <div class="grid2">
       <div class="glass">
         <div class="s-label">Смены</div>
-        <div class="s-mid">${st.shifts}</div>
+        <div class="s-mid">${st.shifts.toLocaleString('ru-RU')}</div>
         <div class="s-note">из ${st.dim} дней</div>
       </div>
       <div class="glass">
@@ -552,6 +567,17 @@ function renderSettings() {
         <input type="text" inputmode="numeric" pattern="[0-9]*" data-field="rate" value="${s.rate}">
         <span class="suffix">₽</span>
       </label>
+    </div>
+
+    <div class="card">
+      <button class="card-head tap" data-action="toggle-halfshift">
+        <span class="tile orange half-tile">${ICON.flame}</span>
+        <span class="grow">
+          <div class="card-title">Полсмены</div>
+          <div class="card-sub">${s.halfShift ? 'В окне дня есть переключатель «Полсмены»' : 'Половина ставки за неполную смену'}</div>
+        </span>
+        <span class="switch ${s.halfShift ? 'on' : ''}"></span>
+      </button>
     </div>
 
     <div class="card">
@@ -682,7 +708,7 @@ const toInt = (v) => Math.max(0, parseInt(String(v).replace(/\D/g, ''), 10) || 0
 function setRate(rate) {
   state.settings.rate = rate;
   if (state.settings.recalc) {
-    for (const d of Object.values(state.days)) if (d.shift) d.rate = rate;
+    for (const d of Object.values(state.days)) if (d.shift || d.half) d.rate = rate;
   }
   save();
 }
@@ -723,7 +749,14 @@ const actions = {
     const key = currentRoute().arg;
     const d = ensureDay(key);
     d.shift = !d.shift;
-    if (d.shift) d.rate = state.settings.rate;
+    if (d.shift) { d.half = false; d.rate = state.settings.rate; }
+    commitDay(key);
+  },
+  'toggle-half'() {
+    const key = currentRoute().arg;
+    const d = ensureDay(key);
+    d.half = !d.half;
+    if (d.half) { d.shift = false; d.rate = state.settings.rate; }
     commitDay(key);
   },
   'set-bathers'(el) {
@@ -783,6 +816,7 @@ const actions = {
   'set-theme'(el) { state.settings.theme = el.dataset.theme; save(); applyTheme(); render(); },
   'export'() { exportBackup(); },
   'import'() { document.getElementById('import-file').click(); },
+  'toggle-halfshift'() { state.settings.halfShift = !state.settings.halfShift; save(); render(); },
   'toggle-recalc'() { state.settings.recalc = !state.settings.recalc; save(); render(); },
   'add-service'() {
     state.services.push({ id: uid(), name: 'Новая услуга', price: 0 });
