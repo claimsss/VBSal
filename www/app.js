@@ -3,7 +3,7 @@
 // ---------- Константы ----------
 
 const STORE_KEY = 'vbsal.v1';
-const APP_VERSION = '1.4';
+const APP_VERSION = '1.5';
 const BREATH_PRICE = 500;   // «второе дыхание» прибавляется к цене процедуры
 const WORKER_SHARE = 0.4;   // банщикам остаётся 40% (минус 60%)
 const DEFAULT_RATE = 4500;
@@ -41,6 +41,7 @@ const ICON = {
   right: svg('<path d="M9 5l7 7-7 7"/>'),
   gear: svg('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>'),
   plus: svg('<path d="M12 5v14M5 12h14"/>'),
+  minus: svg('<path d="M5 12h14"/>'),
   close: svg('<path d="M18 6L6 18M6 6l12 12"/>'),
   wind: svg('<path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/>'),
   flame: svg('<path d="M12 22c4 0 7-2.8 7-6.9 0-3.4-2.4-5.8-3.9-8.4-.5 1.9-1.6 3.1-3 3.6.3-3-1.2-5.8-3.6-8.3C8.4 5.6 5 8.7 5 15.1 5 19.2 8 22 12 22z"/>'),
@@ -334,12 +335,13 @@ function openSheet() {
       </div>
       <div class="sheet-list">
         ${state.services.map((s) => {
-          const c = procCount(key, s.name);
-          return `<button class="svc" data-action="add-proc" data-id="${s.id}">
-            <span class="svc-name">${esc(s.name)}</span>
-            <span class="svc-price">${fmt(s.price)} ₽</span>
-            <span class="badge ${c ? '' : 'hidden'}" data-badge="${s.id}">${c}</span>
-          </button>`;
+          return `<div class="svc">
+            <button class="svc-main" data-action="add-proc" data-id="${s.id}">
+              <span class="svc-name">${esc(s.name)}</span>
+              <span class="svc-price">${fmt(s.price)} ₽</span>
+            </button>
+            <div class="stepper" data-stepper="${s.id}">${stepperHtml(s.id, procCount(key, s.name))}</div>
+          </div>`;
         }).join('')}
       </div>
     </div>`;
@@ -354,13 +356,18 @@ function closeSheet(instant) {
   else setTimeout(() => { if (!root.classList.contains('open')) root.innerHTML = ''; }, 280);
 }
 
+// «− n +» у процедуры в шторке; при нуле — только «+»
+function stepperHtml(id, c) {
+  const plus = `<button class="step" data-action="add-proc" data-id="${id}" aria-label="Добавить">${ICON.plus}</button>`;
+  if (!c) return plus;
+  return `<button class="step" data-action="dec-proc" data-id="${id}" aria-label="Убрать одну">${ICON.minus}</button>
+    <span class="step-count">${c}</span>${plus}`;
+}
+
 function updateSheetBadges(key) {
   for (const s of state.services) {
-    const el = document.querySelector(`[data-badge="${s.id}"]`);
-    if (!el) continue;
-    const c = procCount(key, s.name);
-    el.textContent = c;
-    el.classList.toggle('hidden', !c);
+    const el = document.querySelector(`[data-stepper="${s.id}"]`);
+    if (el) el.innerHTML = stepperHtml(s.id, procCount(key, s.name));
   }
 }
 
@@ -657,6 +664,24 @@ const actions = {
     const svc = state.services.find((s) => s.id === el.dataset.id);
     if (!svc) return;
     ensureDay(key).procs.push({ name: svc.name, price: svc.price, breath: false });
+    commitDay(key);
+    updateSheetBadges(key);
+    if (navigator.vibrate) navigator.vibrate(10);
+  },
+  'dec-proc'(el) {
+    const key = currentRoute().arg;
+    const svc = state.services.find((s) => s.id === el.dataset.id);
+    const d = state.days[key];
+    if (!svc || !d) return;
+    // убираем последнюю такую процедуру, по возможности без «второго дыхания»
+    let i = -1;
+    for (let j = d.procs.length - 1; j >= 0; j--) {
+      if (d.procs[j].name !== svc.name) continue;
+      if (!d.procs[j].breath) { i = j; break; }
+      if (i < 0) i = j;
+    }
+    if (i < 0) return;
+    d.procs.splice(i, 1);
     commitDay(key);
     updateSheetBadges(key);
     if (navigator.vibrate) navigator.vibrate(10);

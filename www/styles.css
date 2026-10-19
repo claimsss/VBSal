@@ -418,31 +418,51 @@ svg { display: block; }
 }
 
 .svc {
-  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px 0;
+  border-radius: 12px;
+}
+.svc-main {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 13px 10px;
+  padding: 13px 4px 13px 10px;
   border-radius: 12px;
   text-align: left;
 }
-.svc:active { background: rgba(255, 255, 255, 0.06); }
+.svc-main:active { background: rgba(255, 255, 255, 0.06); }
 .svc-name { flex: 1; font-size: 16px; }
 .svc-price { font-size: 14px; color: var(--muted); }
 
-.badge {
-  min-width: 22px;
-  height: 22px;
-  padding: 0 6px;
-  border-radius: 11px;
-  background: var(--accent);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 700;
+.stepper {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 104px;
+}
+.step {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
   display: grid;
   place-items: center;
+  background: var(--accent-soft);
+  color: var(--accent-2);
 }
-.badge.hidden { visibility: hidden; }
+.step svg { width: 18px; height: 18px; }
+.step:active { background: rgba(123, 92, 255, 0.3); }
+.step-count {
+  min-width: 26px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+}
 
 /* ---------- Настройки ---------- */
 
@@ -712,7 +732,7 @@ body[data-screen="stats"]::before {
 [data-theme="light"] .switch:not(.on) { background: #d9d9e3; }
 [data-theme="light"] .icon-btn:active,
 [data-theme="light"] .del:active,
-[data-theme="light"] .svc:active { background: rgba(0, 0, 0, 0.05); }
+[data-theme="light"] .svc-main:active { background: rgba(0, 0, 0, 0.05); }
 
 [data-theme="light"] .result { box-shadow: 0 -6px 24px rgba(40, 30, 100, 0.12); }
 [data-theme="light"] .result .sep { background: rgba(108, 76, 245, 0.22); }
