@@ -1,6 +1,6 @@
 // Офлайн-кэш. Отдаём из кэша сразу, а в фоне подтягиваем свежую версию —
 // обновления приложения применяются при следующем запуске.
-const CACHE = 'vbsal-v4';
+const CACHE = 'vbsal-v5';
 const ASSETS = [
   './',
   'index.html',
@@ -9,6 +9,7 @@ const ASSETS = [
   'manifest.webmanifest',
   'icons/icon-192.png',
   'icons/icon-512.png',
+  'icons/icon-maskable-512.png',
   'icons/apple-touch-icon.png',
 ];
 
