@@ -9,6 +9,18 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="VBsal">
+  <script>
+    // Светлая тема до отрисовки, чтобы не мигало тёмным
+    try {
+      var st = JSON.parse(localStorage.getItem('vbsal.v1') || '{}');
+      if (st.settings && st.settings.theme === 'light') {
+        document.documentElement.dataset.theme = 'light';
+        document.querySelector('meta[name="theme-color"]').content = '#f4f4f8';
+        document.querySelector('meta[name="color-scheme"]').content = 'light';
+        document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]').content = 'default';
+      }
+    } catch (e) {}
+  </script>
   <title>VBsal</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" type="image/png" href="icons/icon-192.png">

@@ -3,7 +3,7 @@
 // ---------- Константы ----------
 
 const STORE_KEY = 'vbsal.v1';
-const APP_VERSION = '1.1';
+const APP_VERSION = '1.2';
 const BREATH_PRICE = 500;   // «второе дыхание» прибавляется к цене процедуры
 const WORKER_SHARE = 0.4;   // банщикам остаётся 40% (минус 60%)
 const DEFAULT_RATE = 4500;
@@ -48,6 +48,7 @@ const ICON = {
   leaf: svg('<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>'),
   coins: svg('<circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="M16.71 13.88l.7.71-2.82 2.82"/>'),
   wallet: svg('<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>'),
+  moon: svg('<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'),
   refresh: svg('<path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/>'),
   tag: svg('<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1.5"/>'),
 };
@@ -62,7 +63,7 @@ function defaultServices() {
 
 function defaultState() {
   return {
-    settings: { rate: DEFAULT_RATE, recalc: false },
+    settings: { rate: DEFAULT_RATE, recalc: false, theme: 'dark' },
     services: defaultServices(),
     days: {},
   };
@@ -556,6 +557,17 @@ function renderSettings() {
 
     <div class="card">
       <div class="card-head">
+        <span class="tile purple">${ICON.moon}</span>
+        <div class="grow"><div class="card-title">Тема</div></div>
+      </div>
+      <div class="seg two">
+        <button class="${s.theme !== 'light' ? 'on' : ''}" data-action="set-theme" data-theme="dark">Тёмная</button>
+        <button class="${s.theme === 'light' ? 'on' : ''}" data-action="set-theme" data-theme="light">Светлая</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
         <span class="tile blue">${ICON.tag}</span>
         <div class="grow"><div class="card-title">Прайс</div></div>
       </div>
@@ -658,6 +670,7 @@ const actions = {
     render();
   },
 
+  'set-theme'(el) { state.settings.theme = el.dataset.theme; save(); applyTheme(); render(); },
   'toggle-recalc'() { state.settings.recalc = !state.settings.recalc; save(); render(); },
   'add-service'() {
     state.services.push({ id: uid(), name: 'Новая услуга', price: 0 });
@@ -753,4 +766,18 @@ if (Cap && Cap.isNativePlatform && Cap.isNativePlatform() && Cap.Plugins && Cap.
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 
+// Тема: атрибут на <html>, цвет системных панелей браузера/телефона
+function applyTheme() {
+  const light = state.settings.theme === 'light';
+  document.documentElement.dataset.theme = light ? 'light' : 'dark';
+  const meta = (n) => document.querySelector(`meta[name="${n}"]`);
+  meta('theme-color').content = light ? '#f4f4f8' : '#111214';
+  meta('apple-mobile-web-app-status-bar-style').content = light ? 'default' : 'black-translucent';
+  meta('color-scheme').content = light ? 'light' : 'dark';
+  const bars = Cap && Cap.Plugins && Cap.Plugins.SystemBars;
+  // DARK = светлые значки для тёмного фона, LIGHT — наоборот
+  if (bars && bars.setStyle) bars.setStyle({ style: light ? 'LIGHT' : 'DARK' }).catch(() => {});
+}
+
+applyTheme();
 render();
