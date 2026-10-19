@@ -3,7 +3,7 @@
 // ---------- Константы ----------
 
 const STORE_KEY = 'vbsal.v1';
-const APP_VERSION = '1.5';
+const APP_VERSION = '1.6';
 const BREATH_PRICE = 500;   // «второе дыхание» прибавляется к цене процедуры
 const WORKER_SHARE = 0.4;   // банщикам остаётся 40% (минус 60%)
 const DEFAULT_RATE = 4500;
@@ -51,6 +51,7 @@ const ICON = {
   wallet: svg('<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>'),
   moon: svg('<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'),
   refresh: svg('<path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/>'),
+  backup: svg('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>'),
   tag: svg('<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1.5"/>'),
 };
 
@@ -70,18 +71,20 @@ function defaultState() {
   };
 }
 
+// Дополняет данные старых версий недостающими полями
+function normalizeState(s) {
+  const base = defaultState();
+  return {
+    settings: { ...base.settings, ...s.settings },
+    services: Array.isArray(s.services) ? s.services : base.services,
+    days: s.days && typeof s.days === 'object' ? s.days : {},
+  };
+}
+
 function loadState() {
   try {
     const raw = localStorage.getItem(STORE_KEY);
-    if (raw) {
-      const s = JSON.parse(raw);
-      const base = defaultState();
-      return {
-        settings: { ...base.settings, ...s.settings },
-        services: Array.isArray(s.services) ? s.services : base.services,
-        days: s.days && typeof s.days === 'object' ? s.days : {},
-      };
-    }
+    if (raw) return normalizeState(JSON.parse(raw));
   } catch (e) { /* повреждённые данные — начинаем с чистого листа */ }
   return defaultState();
 }
@@ -575,6 +578,20 @@ function renderSettings() {
 
     <div class="card">
       <div class="card-head">
+        <span class="tile green">${ICON.backup}</span>
+        <div class="grow">
+          <div class="card-title">Резервная копия</div>
+          <div class="card-sub">${s.lastBackup ? `Последняя: ${new Date(s.lastBackup).toLocaleDateString('ru-RU')}` : 'Копий ещё не было'}</div>
+        </div>
+      </div>
+      <button class="btn" data-action="export">Сохранить копию</button>
+      <button class="btn outline" data-action="import">Восстановить из файла</button>
+      <input type="file" id="import-file" hidden>
+      <div class="hint">Сохраните файл в «Файлы» или отправьте себе в Telegram. При восстановлении текущие данные заменяются данными из файла.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
         <span class="tile blue">${ICON.tag}</span>
         <div class="grow"><div class="card-title">Прайс</div></div>
       </div>
@@ -590,6 +607,74 @@ function renderSettings() {
 
     <div class="version">VBsal ${APP_VERSION}</div>
   </div>`;
+}
+
+// ---------- Резервная копия ----------
+
+const isNative = () => !!(Cap && Cap.isNativePlatform && Cap.isNativePlatform());
+const isCancel = (e) => e && (e.name === 'AbortError' || /cancel/i.test(e.message || ''));
+
+async function exportBackup() {
+  const t = new Date();
+  const name = `vbsal-${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}.json`;
+  const json = JSON.stringify({ app: 'VBsal', format: 1, exportedAt: t.toISOString(), data: state });
+  try {
+    if (isNative()) {
+      // в APK браузерное «Поделиться» недоступно — пишем файл и отдаём системному меню
+      const { Filesystem, Share } = Cap.Plugins;
+      const res = await Filesystem.writeFile({ path: name, data: json, directory: 'CACHE', encoding: 'utf8' });
+      await Share.share({ title: 'Резервная копия VBsal', files: [res.uri] });
+    } else {
+      const file = new File([json], name, { type: 'application/json' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Резервная копия VBsal' });
+      } else {
+        const url = URL.createObjectURL(file);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    }
+    state.settings.lastBackup = t.toISOString();
+    save();
+    render();
+  } catch (e) {
+    if (!isCancel(e)) alert('Не удалось сохранить копию: ' + ((e && e.message) || e));
+  }
+}
+
+function importBackup(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    let next, parsed;
+    try {
+      parsed = JSON.parse(reader.result);
+      const data = parsed && parsed.data ? parsed.data : parsed;
+      if (!data || !data.settings || typeof data.days !== 'object') throw new Error('format');
+      next = normalizeState(data);
+    } catch (e) {
+      alert('Этот файл не похож на резервную копию VBsal.');
+      return;
+    }
+    const shifts = Object.values(next.days).filter((d) => d.shift).length;
+    const when = parsed.exportedAt ? new Date(parsed.exportedAt).toLocaleDateString('ru-RU') : 'неизвестной даты';
+    if (!confirm(`Восстановить копию от ${when}? Смен в копии: ${shifts}.
+
+Текущие данные на телефоне будут заменены.`)) return;
+    // на всякий случай откладываем текущие данные
+    try { localStorage.setItem(STORE_KEY + '.before-import', JSON.stringify(state)); } catch (e) { /* нет места */ }
+    state = next;
+    save();
+    applyTheme();
+    render();
+    alert('Данные восстановлены.');
+  };
+  reader.onerror = () => alert('Не удалось прочитать файл.');
+  reader.readAsText(file);
 }
 
 const toInt = (v) => Math.max(0, parseInt(String(v).replace(/\D/g, ''), 10) || 0);
@@ -696,6 +781,8 @@ const actions = {
   },
 
   'set-theme'(el) { state.settings.theme = el.dataset.theme; save(); applyTheme(); render(); },
+  'export'() { exportBackup(); },
+  'import'() { document.getElementById('import-file').click(); },
   'toggle-recalc'() { state.settings.recalc = !state.settings.recalc; save(); render(); },
   'add-service'() {
     state.services.push({ id: uid(), name: 'Новая услуга', price: 0 });
@@ -725,6 +812,11 @@ document.addEventListener('click', (e) => {
 
 document.addEventListener('change', (e) => {
   const el = e.target;
+  if (el.id === 'import-file') {
+    if (el.files && el.files[0]) importBackup(el.files[0]);
+    el.value = '';
+    return;
+  }
   const f = el.dataset && el.dataset.field;
   if (!f) return;
   if (f === 'tips') {

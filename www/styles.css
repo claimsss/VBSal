@@ -504,6 +504,13 @@ svg { display: block; }
   font-weight: 600;
 }
 .btn:active { background: rgba(123, 92, 255, 0.26); }
+.btn.outline {
+  margin-top: 8px;
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+.btn.outline:active { background: var(--card-2); }
 .btn.ghost {
   height: 38px;
   margin-top: 6px;
