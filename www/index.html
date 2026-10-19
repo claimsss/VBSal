@@ -13,7 +13,9 @@
     // Светлая тема до отрисовки, чтобы не мигало тёмным
     try {
       var st = JSON.parse(localStorage.getItem('vbsal.v1') || '{}');
-      if (st.settings && st.settings.theme === 'light') {
+      var th = st.settings && st.settings.theme;
+      if (th === 'system') th = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      if (th === 'light') {
         document.documentElement.dataset.theme = 'light';
         document.querySelector('meta[name="theme-color"]').content = '#f4f4f8';
         document.querySelector('meta[name="color-scheme"]').content = 'light';

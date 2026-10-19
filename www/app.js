@@ -3,7 +3,7 @@
 // ---------- Константы ----------
 
 const STORE_KEY = 'vbsal.v1';
-const APP_VERSION = '1.2';
+const APP_VERSION = '1.3';
 const BREATH_PRICE = 500;   // «второе дыхание» прибавляется к цене процедуры
 const WORKER_SHARE = 0.4;   // банщикам остаётся 40% (минус 60%)
 const DEFAULT_RATE = 4500;
@@ -560,9 +560,9 @@ function renderSettings() {
         <span class="tile purple">${ICON.moon}</span>
         <div class="grow"><div class="card-title">Тема</div></div>
       </div>
-      <div class="seg two">
-        <button class="${s.theme !== 'light' ? 'on' : ''}" data-action="set-theme" data-theme="dark">Тёмная</button>
-        <button class="${s.theme === 'light' ? 'on' : ''}" data-action="set-theme" data-theme="light">Светлая</button>
+      <div class="seg three">
+        ${[['dark', 'Тёмная'], ['light', 'Светлая'], ['system', 'Системная']]
+          .map(([v, label]) => `<button class="${(s.theme || 'dark') === v ? 'on' : ''}" data-action="set-theme" data-theme="${v}">${label}</button>`).join('')}
       </div>
     </div>
 
@@ -766,9 +766,18 @@ if (Cap && Cap.isNativePlatform && Cap.isNativePlatform() && Cap.Plugins && Cap.
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 
-// Тема: атрибут на <html>, цвет системных панелей браузера/телефона
+// Тема: атрибут на <html>, цвет системных панелей браузера/телефона.
+// «Системная» берёт светлую/тёмную из настроек телефона и следит за их сменой.
+const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+
+function resolvedTheme() {
+  const t = state.settings.theme;
+  if (t === 'system') return systemDark.matches ? 'dark' : 'light';
+  return t === 'light' ? 'light' : 'dark';
+}
+
 function applyTheme() {
-  const light = state.settings.theme === 'light';
+  const light = resolvedTheme() === 'light';
   document.documentElement.dataset.theme = light ? 'light' : 'dark';
   const meta = (n) => document.querySelector(`meta[name="${n}"]`);
   meta('theme-color').content = light ? '#f4f4f8' : '#111214';
@@ -778,6 +787,10 @@ function applyTheme() {
   // DARK = светлые значки для тёмного фона, LIGHT — наоборот
   if (bars && bars.setStyle) bars.setStyle({ style: light ? 'LIGHT' : 'DARK' }).catch(() => {});
 }
+
+const onSystemTheme = () => { if (state.settings.theme === 'system') applyTheme(); };
+if (systemDark.addEventListener) systemDark.addEventListener('change', onSystemTheme);
+else if (systemDark.addListener) systemDark.addListener(onSystemTheme);
 
 applyTheme();
 render();

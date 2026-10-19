@@ -675,6 +675,8 @@ body[data-screen="stats"]::before {
 .s-empty { text-align: center; color: #7d879b; font-size: 14px; padding: 14px 0; }
 
 .seg.two { grid-template-columns: 1fr 1fr; }
+.seg.three { grid-template-columns: repeat(3, 1fr); }
+.seg.three button { font-size: 15px; }
 
 /* ---------- Светлая тема ---------- */
 
